@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- AdMob App ID - Replace with your actual App ID in the app module -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
