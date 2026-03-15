@@ -11,6 +11,8 @@ object AdLogger {
     private const val TAG = "OurAds"
 
     var isEnabled: Boolean = true
+    var showToasts: Boolean = false
+    var onLogListener: ((String) -> Unit)? = null
 
     // Ad Types
     const val TYPE_NATIVE = "Native"
@@ -149,5 +151,12 @@ object AdLogger {
     fun error(adType: String, message: String) {
         if (!isEnabled) return
         Log.e(TAG, "[$adType] $message")
+    }
+
+    /**
+     * Get a summary of current ad status
+     */
+    fun getStatusSummary(): String {
+        return "AdLogger enabled=$isEnabled, toasts=$showToasts"
     }
 }
