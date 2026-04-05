@@ -1,3 +1,7 @@
 /build
+*/build
 .gradle
 local.properties
+.claude/
+.idea/
+app/google-services.json

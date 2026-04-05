@@ -20,3 +20,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "our_ads"
+
+include(":ads-lib", ":app")
