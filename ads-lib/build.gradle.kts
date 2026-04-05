@@ -78,8 +78,26 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.github.dungpro1572000"
                 artifactId = "our_ads"
-                version = "1.0.0"
+                version = "1.1.0"
+
+                // Đảm bảo transitive dependencies được khai báo trong POM
+                pom {
+                    name.set("Our Ads")
+                    description.set("Android Ads library with AdMob, Remote Config, and DataStore")
+                    url.set("https://github.com/dungpro1572000/our_ads")
+
+                    licenses {
+                        license {
+                            name.set("The Apache License, Version 2.0")
+                            url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                }
             }
+        }
+
+        repositories {
+            mavenLocal()
         }
     }
 }
