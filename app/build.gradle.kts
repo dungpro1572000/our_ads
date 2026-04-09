@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.dungz.our_ads.demo"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.dungz.our_ads.demo"
@@ -35,8 +35,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        }
     }
 }
 
@@ -56,5 +58,5 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
 
     // Google Mobile Ads (needed at runtime)
-    implementation("com.google.android.gms:play-services-ads:23.6.0")
+    implementation("com.google.android.gms:play-services-ads:25.0.0")
 }

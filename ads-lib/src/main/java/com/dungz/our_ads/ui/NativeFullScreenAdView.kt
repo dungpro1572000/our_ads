@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,10 +23,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toBitmap
+import com.dungz.our_ads.R
 import com.google.android.gms.ads.nativead.NativeAd
 
 @Composable
@@ -168,7 +168,7 @@ fun NativeFullScreenAdView(
                     .size(36.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    painterResource(R.drawable.our_ads_ic_close),
                     contentDescription = "Close",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)

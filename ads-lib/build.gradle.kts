@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.dungz.our_ads"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24
@@ -33,37 +33,39 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        }
     }
 }
 
 dependencies {
 
     // Compose
-    implementation(platform("androidx.compose:compose-bom:2024.09.00"))
+    implementation(platform("androidx.compose:compose-bom:2026.03.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.runtime:runtime")
     
     // Google Mobile Ads
-    implementation("com.google.android.gms:play-services-ads-lite:23.6.0")
+    implementation("com.google.android.gms:play-services-ads-lite:25.0.0")
     
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Firebase Remote Config
-    implementation("com.google.firebase:firebase-config-ktx:22.0.1")
+    implementation("com.google.firebase:firebase-config-ktx:22.1.2")
 
     // Coroutines Play Services (for Task.await())
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 
     // DataStore Preferences
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
 
     // Core
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.core:core-ktx:1.18.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
@@ -78,7 +80,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.github.dungpro1572000"
                 artifactId = "our_ads"
-                version = "1.1.0"
+                version = "1.1.1"
 
                 // Đảm bảo transitive dependencies được khai báo trong POM
                 pom {
