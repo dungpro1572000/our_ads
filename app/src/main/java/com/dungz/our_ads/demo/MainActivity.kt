@@ -29,15 +29,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
-import com.dungz.our_ads.AdsInitializer
-import com.dungz.our_ads.AppAdMob
-import com.dungz.our_ads.FullScreenNativeContainerAdView
-import com.dungz.our_ads.MediumNativeContainerAdView
+import com.dungz.our_ads.controller.InterAdsController
+import com.dungz.our_ads.controller.NativeAdsController
+import com.dungz.our_ads.controller.RewardAdsController
 import com.dungz.our_ads.remotedata.RemoteConfigData
-import com.dungz.our_ads.state.NativeAdState
 import com.dungz.our_ads.ui.SmartBannerAd
-import com.google.android.gms.ads.interstitial.InterstitialAd
-import com.google.android.gms.ads.rewarded.RewardedAd
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
 
@@ -47,7 +43,7 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "OurAdsDemo"
 
         // Google test ad unit IDs
-        private const val TEST_BANNER_ID = "ca-app-pub-3940256099942544/6300978111"
+        private const val TEST_BANNER_ID = "ca-app-pub-3940256099942544/9214589741"
         private const val TEST_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712"
         private const val TEST_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917"
         private const val TEST_NATIVE_ID = "ca-app-pub-3940256099942544/2247696110"
@@ -57,7 +53,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
             RemoteConfigData.syncData()
-            Log.d("DungNT2", "${RemoteConfigData.get(RemoteConfigData.ENABLE_ADS)}")
         }
 
         setContent {
@@ -77,16 +72,12 @@ class MainActivity : ComponentActivity() {
 
         var statusText by remember { mutableStateOf("Ready") }
 
-        // State variables for ads
-        var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
-        var rewardedAd by remember { mutableStateOf<RewardedAd?>(null) }
-        var nativeAdState by remember { mutableStateOf<NativeAdState>(NativeAdState.NotLoaded) }
         var showNativeFullScreen by remember { mutableStateOf(false) }
 
         // Full Screen Native Ad Dialog
         if (showNativeFullScreen) {
-            FullScreenNativeContainerAdView(
-                nativeAdState = nativeAdState,
+            NativeAdsController.FullScreenNativeContainerAdView(
+                adId = TEST_NATIVE_ID,
                 onCloseClick = { showNativeFullScreen = false }
             )
         }
@@ -114,16 +105,11 @@ class MainActivity : ComponentActivity() {
                 onClick = {
                     statusText = "Interstitial: loading..."
                     scope.launch {
-                        AppAdMob.loadInterstitialAds(
-                            context = WeakReference(activity),
-                            id = TEST_INTERSTITIAL_ID,
-                            onLoadSuccess = { ad ->
-                                statusText = "Interstitial: loaded"
-                                interstitialAd = ad
-                            },
-                            onAdFailedToLoad = { error ->
-                                statusText = "Interstitial: failed ${error.message}"
-                            }
+                        InterAdsController.preloadAds(
+                            activity = WeakReference(activity),
+                            adUnitId = TEST_INTERSTITIAL_ID,
+                            onLoadFailed = { statusText = "Interstitial: failed" },
+                            onLoadSuccess = { statusText = "Interstitial: loaded" }
                         )
                     }
                 },
@@ -132,20 +118,13 @@ class MainActivity : ComponentActivity() {
 
             Button(
                 onClick = {
-                    interstitialAd?.let { ad ->
-                        AppAdMob.showInterstitialAd(
-                            activity = activity,
-                            interstitialAd = ad,
-                            onAdDismissed = {
-                                statusText = "Interstitial: dismissed"
-                                interstitialAd = null
-                            },
-                            onAdFailedToShow = { error ->
-                                statusText = "Interstitial: show failed ${error.message}"
-                            }
+                    scope.launch {
+                        InterAdsController.showAds(
+                            activity = WeakReference(activity),
+                            adUnitId = TEST_INTERSTITIAL_ID,
+                            onShowFailed = { statusText = "Interstitial: show failed" },
+                            onShowSuccess = { statusText = "Interstitial: dismissed" }
                         )
-                    } ?: run {
-                        statusText = "Load Interstitial first"
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -157,16 +136,11 @@ class MainActivity : ComponentActivity() {
                 onClick = {
                     statusText = "Rewarded: loading..."
                     scope.launch {
-                        AppAdMob.loadRewardAds(
-                            context = WeakReference(activity),
-                            id = TEST_REWARDED_ID,
-                            onLoadSuccess = { ad ->
-                                statusText = "Rewarded: loaded"
-                                rewardedAd = ad
-                            },
-                            onAdFailedToLoad = { error ->
-                                statusText = "Rewarded: failed ${error.message}"
-                            }
+                        RewardAdsController.preloadAds(
+                            activity = WeakReference(activity),
+                            adUnitId = TEST_REWARDED_ID,
+                            onLoadFailed = { statusText = "Rewarded: failed" },
+                            onLoadSuccess = { statusText = "Rewarded: loaded" }
                         )
                     }
                 },
@@ -175,23 +149,16 @@ class MainActivity : ComponentActivity() {
 
             Button(
                 onClick = {
-                    rewardedAd?.let { ad ->
-                        AppAdMob.showRewardAds(
-                            activity = activity,
-                            rewardedAd = ad,
-                            onUserEarnedReward = { reward ->
-                                Toast.makeText(context, "Earned: ${reward.amount} ${reward.type}", Toast.LENGTH_SHORT).show()
+                    scope.launch {
+                        RewardAdsController.showAds(
+                            activity = WeakReference(activity),
+                            adUnitId = TEST_REWARDED_ID,
+                            onUserEarn = {
+                                Toast.makeText(context, "Earned reward!", Toast.LENGTH_SHORT).show()
                             },
-                            onAdDismissed = {
-                                statusText = "Rewarded: dismissed"
-                                rewardedAd = null
-                            },
-                            onAdFailedToShow = { error ->
-                                statusText = "Rewarded: show failed ${error.message}"
-                            }
+                            onShowFailed = { statusText = "Rewarded: show failed" },
+                            onShowSuccess = { statusText = "Rewarded: dismissed" }
                         )
-                    } ?: run {
-                        statusText = "Load Rewarded first"
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -202,29 +169,19 @@ class MainActivity : ComponentActivity() {
             Button(
                 onClick = {
                     statusText = "Native: loading..."
-                    nativeAdState = NativeAdState.Loading
                     scope.launch {
-                        AppAdMob.loadSingleNativeAds(
-                            context = WeakReference(activity),
-                            id = TEST_NATIVE_ID,
-                            onAdClick = { Log.d(TAG, "Native clicked") },
-                            onAdImpression = { Log.d(TAG, "Native impression") },
-                            onLoadSuccess = { ad ->
-                                statusText = "Native: loaded"
-                                nativeAdState = NativeAdState.Loaded(ad)
-                            },
-                            onAdFailedToLoad = { error ->
-                                statusText = "Native: failed ${error.message}"
-                                nativeAdState = NativeAdState.Failed(error)
-                            }
+                        NativeAdsController.preloadAds(
+                            activity = WeakReference(activity),
+                            adUnitId = TEST_NATIVE_ID
                         )
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Load Native") }
 
-            MediumNativeContainerAdView(
-                nativeAdState = nativeAdState,
+            NativeAdsController.MediumNativeContainerAdView(
+                activity = WeakReference(activity),
+                adId = TEST_NATIVE_ID,
                 nativeLayout = com.dungz.our_ads.R.layout.native_ad_medium
             )
 
@@ -232,10 +189,14 @@ class MainActivity : ComponentActivity() {
             Text("Native Full Screen", style = MaterialTheme.typography.titleMedium)
             Button(
                 onClick = {
-                    if (nativeAdState is NativeAdState.Loaded) {
-                        showNativeFullScreen = true
-                    } else {
-                        statusText = "Load Native first"
+                    showNativeFullScreen = true
+                    if (NativeAdsController.canPreloadAds(TEST_NATIVE_ID)) {
+                        scope.launch {
+                            NativeAdsController.preloadAds(
+                                activity = WeakReference(activity),
+                                adUnitId = TEST_NATIVE_ID
+                            )
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()

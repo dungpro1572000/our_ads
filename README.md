@@ -94,7 +94,19 @@ fun MyScreen() {
 }
 ```
 
-### 2. Native Ad (Compose thuần)
+### 2. Native Ad - Preload
+
+```kotlin
+// Preload (gọi sớm, VD: khi mở app)
+lifecycleScope.launch {
+    NativeAdsController.preloadAds(
+        activity = WeakReference(this@MainActivity),
+        adUnitId = "ca-app-pub-xxx/xxx"
+    )
+}
+```
+
+### Native Ad (Compose thuần)
 
 Dùng Compose wrapper để tự thiết kế layout:
 
@@ -145,75 +157,72 @@ fun MyNativeAd(nativeAd: NativeAd) {
 
 **Compose wrapper có sẵn:** `NativeAdHeadlineView`, `NativeAdBodyView`, `NativeAdMediaView`, `NativeAdIconView`, `NativeAdCallToActionView`, `NativeAdAdvertiserView`, `NativeAdStarRatingView`, `NativeAdPriceView`, `NativeAdStoreView`, `NativeAdChoicesView`, `NativeAdAttribution`, `NativeAdButton`.
 
-### 3. Native Ad (XML layout)
+### Native Ad (XML layout) - Medium
 
-Dùng với XML layout truyền thống:
+Dùng `NativeAdsController.MediumNativeContainerAdView` với XML layout truyền thống:
 
 ```kotlin
 @Composable
-fun MyScreen(nativeAdState: NativeAdState) {
-    // Medium native ad với shimmer loading
-    MediumNativeContainerAdView(
-        nativeAdState = nativeAdState,
-        nativeLayout = R.layout.your_native_ad_layout,
-        shimmerAds = { /* Custom shimmer hoặc null để dùng default */ }
-    )
+fun MyScreen() {
+    val adUnitId = "ca-app-pub-xxx/xxx"
+    val nativeAdState = NativeAdsController.listAds[adUnitId]
+
+    if (nativeAdState != null) {
+        NativeAdsController.MediumNativeContainerAdView(
+            nativeAdState = nativeAdState,
+            nativeLayout = R.layout.your_native_ad_layout, // hoặc dùng default R.layout.native_ad_medium
+            shimmerAds = { /* Custom shimmer hoặc null để dùng default */ }
+        )
+    }
 }
 ```
 
 XML layout cần có các view ID: `ad_headline`, `ad_call_to_action`, `ad_media`, `ad_body`, `ad_app_icon`, `ad_advertiser`, `ad_stars`.
 
-### 4. Native Ad Full Screen
+### Native Ad Full Screen
 
-**Compose:**
-
-```kotlin
-@Composable
-fun ShowFullScreenAd(nativeAd: NativeAd, onClose: () -> Unit) {
-    NativeFullScreenAdView(
-        nativeAd = nativeAd,
-        onCloseClick = onClose
-    )
-}
-```
-
-**XML layout:**
+Dùng `NativeAdsController.FullScreenNativeContainerAdView`, layout content được `<include>` từ `native_ad_fullscreen_content.xml`:
 
 ```kotlin
 @Composable
-fun ShowFullScreenAd(nativeAdState: NativeAdState, onClose: () -> Unit) {
-    FullScreenNativeContainerAdView(
-        nativeAdState = nativeAdState,
-        onCloseClick = onClose
-    )
+fun MyScreen() {
+    val adUnitId = "ca-app-pub-xxx/xxx"
+    val nativeAdState = NativeAdsController.listAds[adUnitId]
+
+    if (nativeAdState != null) {
+        NativeAdsController.FullScreenNativeContainerAdView(
+            nativeAdState = nativeAdState,
+            onCloseClick = { /* đóng ad */ }
+        )
+    }
 }
 ```
 
-### 5. Interstitial Ad
+### 3. Interstitial Ad
 
 ```kotlin
-// Preload
+// Preload (gọi sớm, VD: khi mở app)
 lifecycleScope.launch {
     InterAdsController.preloadAds(
         activity = WeakReference(this@MainActivity),
         adUnitId = "ca-app-pub-xxx/xxx",
-        preloadKey = "inter_main"
+        onLoadFailed = { /* xử lý lỗi */ },
+        onLoadSuccess = { /* load thành công */ }
     )
 }
 
 // Hiển thị khi đã load xong
-val state = InterAdsController.listAds["inter_main"]
-if (state is InterAdState.Loaded) {
-    AppAdMob.showInterstitialAd(
-        activity = this,
-        interstitialAd = state.interstitialAd,
-        onAdDismissed = { /* user đóng ad */ },
-        onAdFailedToShow = { error -> /* xử lý lỗi */ }
+lifecycleScope.launch {
+    InterAdsController.showAds(
+        activity = WeakReference(this@MainActivity),
+        adUnitId = "ca-app-pub-xxx/xxx",
+        onShowFailed = { /* show thất bại */ },
+        onShowSuccess = { /* user đóng ad */ }
     )
 }
 ```
 
-### 6. Rewarded Ad
+### 4. Rewarded Ad
 
 ```kotlin
 // Preload
@@ -221,21 +230,19 @@ lifecycleScope.launch {
     RewardAdsController.preloadAds(
         activity = WeakReference(this@MainActivity),
         adUnitId = "ca-app-pub-xxx/xxx",
-        preloadKey = "reward_main"
+        onLoadFailed = { /* xử lý lỗi */ },
+        onLoadSuccess = { /* load thành công */ }
     )
 }
 
-// Hiển thị
-val state = RewardAdsController.listAds["reward_main"]
-if (state is RewardAdState.Loaded) {
-    AppAdMob.showRewardAds(
-        activity = this,
-        rewardedAd = state.rewardedAd,
-        onUserEarnedReward = { reward ->
-            Log.d("Ads", "Reward: ${reward.type}, amount: ${reward.amount}")
-        },
-        onAdDismissed = { /* user đóng ad */ },
-        onAdFailedToShow = { error -> /* xử lý lỗi */ }
+// Hiển thị khi đã load xong
+lifecycleScope.launch {
+    RewardAdsController.showAds(
+        activity = WeakReference(this@MainActivity),
+        adUnitId = "ca-app-pub-xxx/xxx",
+        onUserEarn = { /* user nhận thưởng */ },
+        onShowFailed = { /* show thất bại */ },
+        onShowSuccess = { /* user đóng ad */ }
     )
 }
 ```
@@ -255,11 +262,11 @@ Các controller giúp preload ads trước khi hiển thị, tránh delay:
 **Pattern chung:**
 
 ```kotlin
-// 1. Preload (gọi sớm, VD: khi mở app)
-XxxController.preloadAds(WeakReference(activity), adUnitId, "unique_key")
+// 1. Preload (gọi sớm, VD: khi mở app) - dùng adUnitId làm key
+XxxController.preloadAds(WeakReference(activity), adUnitId)
 
-// 2. Kiểm tra state
-val state = XxxController.listAds["unique_key"]
+// 2. Kiểm tra state bằng adUnitId
+val state = XxxController.listAds[adUnitId]
 
 // 3. Dùng khi state là Loaded
 when (state) {

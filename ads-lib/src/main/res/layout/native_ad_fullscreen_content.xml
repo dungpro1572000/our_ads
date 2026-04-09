@@ -2,6 +2,7 @@
 <!-- Content-only NativeAdLayout for Compose interop (no close button, no FrameLayout wrapper) -->
 <com.google.android.gms.ads.nativead.NativeAdView
     xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/native_ad_view"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/white"

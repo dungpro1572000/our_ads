@@ -1,6 +1,5 @@
 package com.dungz.our_ads.ui
 
-import android.util.Log
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -16,15 +15,18 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.dungz.our_ads.remotedata.RemoteConfigData
+import com.dungz.our_ads.utils.AdLogger
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.LoadAdError
 
 @Composable
 fun SmartBannerAd(adUnitId: String) {
     var enableAds by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         enableAds = RemoteConfigData.get(RemoteConfigData.ENABLE_ADS) == true
+        AdLogger.debug(AdLogger.TYPE_BANNER, "check enable ads: $enableAds")
     }
     if (!enableAds) return
 
@@ -41,6 +43,17 @@ fun SmartBannerAd(adUnitId: String) {
             ) // Hoặc AdSize.BANNER
             setAdUnitId(adUnitId)
             loadAd(AdRequest.Builder().build())
+        }
+    }
+    adView.adListener = object : com.google.android.gms.ads.AdListener() {
+        override fun onAdFailedToLoad(p0: LoadAdError) {
+            super.onAdFailedToLoad(p0)
+            AdLogger.error(AdLogger.TYPE_BANNER, "load banner failed: ${p0.message}")
+        }
+
+        override fun onAdLoaded() {
+            super.onAdLoaded()
+            AdLogger.debug(AdLogger.TYPE_BANNER, "load banner successfully")
         }
     }
 

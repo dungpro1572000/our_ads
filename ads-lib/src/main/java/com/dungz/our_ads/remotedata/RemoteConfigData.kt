@@ -22,10 +22,10 @@ object RemoteConfigData {
 
     private lateinit var appContext: Context
     const val ENABLE_ADS = "enable_all_ads"
-    private val enable_all_ads = DataKey(ENABLE_ADS, "false")
+    private val enable_all_ads = DataKey(ENABLE_ADS, true)
 
     // Danh sách các key cần sync
-    private val localSyncRemoteConfigListKey = listOf(enable_all_ads)
+    private val localSyncRemoteConfigListKey: List<DataKey<*>> = listOf(enable_all_ads)
 
     // Gọi 1 lần trong Application.onCreate()
     fun init(context: Context) {
@@ -35,12 +35,16 @@ object RemoteConfigData {
     suspend fun get(key: String): Any {
         val dataKey = localSyncRemoteConfigListKey.find { it.key == key }
         val prefs = appContext.dataStore.data.first()
-        return when (dataKey?.value) {
-            is String -> prefs[stringPreferencesKey(dataKey.key)] ?: dataKey.value
-            is Boolean -> prefs[booleanPreferencesKey(dataKey.key)] ?: dataKey.value
-            is Int -> prefs[intPreferencesKey(dataKey.key)] ?: dataKey.value
-            is Long -> prefs[longPreferencesKey(dataKey.key)] ?: dataKey.value
-            else -> Unit
+        return try {
+            when (dataKey?.value) {
+                is String -> prefs[stringPreferencesKey(dataKey.key)] ?: dataKey.value
+                is Boolean -> prefs[booleanPreferencesKey(dataKey.key)] ?: dataKey.value
+                is Int -> prefs[intPreferencesKey(dataKey.key)] ?: dataKey.value
+                is Long -> prefs[longPreferencesKey(dataKey.key)] ?: dataKey.value
+                else -> Unit
+            }
+        } catch (e: ClassCastException) {
+            dataKey?.value ?: Unit
         }
     }
 
@@ -72,6 +76,8 @@ object RemoteConfigData {
                         val value = if (hasRemoteValue) remoteConfig.getLong(dataKey.key) else dataKey.value as Long
                         prefs[longPreferencesKey(dataKey.key)] = value
                     }
+
+                    else -> {}
                 }
             }
         }
