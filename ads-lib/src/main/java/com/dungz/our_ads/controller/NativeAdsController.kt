@@ -128,6 +128,7 @@ object NativeAdsController {
 
     @Composable
     fun MediumNativeContainerAdView(
+        modifier: Modifier = Modifier,
         activity: WeakReference<Activity>,
         adId: String,
         lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current,
@@ -162,7 +163,7 @@ object NativeAdsController {
             is NativeAdState.Loaded -> {
                 AndroidView(
                     factory = { context -> inflateNativeAdView(context, nativeLayout) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = modifier.fillMaxWidth(),
                     update = { adView -> bindNativeAd(adView, state.nativeAd) }
                 )
             }
