@@ -196,3 +196,5 @@ fun DefaultNativeAdShimmer() {
         )
     }
 }
+
+fun getHighNormalAdById(idHigh:String, idNormal:String) = "$idHigh-$idNormal"

@@ -1,6 +1,7 @@
 package com.dungz.our_ads.controller
 
 import android.app.Activity
+import android.util.Log
 import android.view.LayoutInflater
 import android.widget.ImageButton
 import androidx.annotation.LayoutRes
@@ -26,13 +27,19 @@ import com.dungz.our_ads.remotedata.RemoteConfigData
 import com.dungz.our_ads.state.NativeAdState
 import com.dungz.our_ads.utils.DefaultNativeAdShimmer
 import com.dungz.our_ads.utils.bindNativeAd
+import com.dungz.our_ads.utils.getHighNormalAdById
 import com.dungz.our_ads.utils.inflateNativeAdView
 import com.google.android.gms.ads.nativead.NativeAdView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
 
 object NativeAdsController {
     val listAds = mutableStateMapOf<String, MutableStateFlow<NativeAdState>>()
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     const val TAG = "ControllerNativeAds"
 
     fun isAdsLoading(key: String) = listAds[key]?.value is NativeAdState.Loading
@@ -43,19 +50,94 @@ object NativeAdsController {
 
     suspend fun preloadAds(
         activity: WeakReference<Activity>,
-        adUnitId: String
+        isShow: Boolean = true,
+        adUnitId: String,
+        onLoadFailed: () -> Unit = {},
+        onLoadSuccess: () -> Unit = {},
     ) {
-        if (!canPreloadAds(adUnitId) || RemoteConfigData.get(RemoteConfigData.ENABLE_ADS) != true) return
+        if (!isShow || !canPreloadAds(adUnitId) || RemoteConfigData.get(RemoteConfigData.ENABLE_ADS) != true) return
         listAds.getOrPut(adUnitId) { MutableStateFlow(NativeAdState.Loading) }
         listAds[adUnitId]?.emit(NativeAdState.Loading)
         AppAdMob.loadSingleNativeAds(activity, adUnitId, {}, {
         }, {
-            listAds[adUnitId]?.value =  NativeAdState.Failed(it)
+            listAds[adUnitId]?.value = NativeAdState.Failed(it)
             AdLogger.error(AdLogger.TYPE_NATIVE, "onLoad ads failed by : ${it.message}")
+            onLoadFailed()
         }, {
             listAds[adUnitId]?.value = NativeAdState.Loaded(it)
             AdLogger.debug(AdLogger.TYPE_NATIVE, "onLoad ads successfully")
+            onLoadSuccess()
         })
+    }
+
+    suspend fun loadHighNormalIds(
+        activity: WeakReference<Activity>,
+        showHigh: Boolean = true,
+        showNormal: Boolean = true,
+        adUnitIdHigh: String,
+        adUnitIdNormal: String,
+        onLoadFailed: () -> Unit,
+        onLoadSuccess: () -> Unit,
+    ) {
+        if (!canPreloadAds(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))) return
+        if (showHigh) {
+            AppAdMob.loadSingleNativeAds(
+                activity,
+                adUnitIdHigh,
+                onAdClick = {},
+                onAdImpression = {},
+                onAdFailedToLoad = {
+                    if (showNormal) {
+                        scope.launch {
+                            AppAdMob.loadSingleNativeAds(
+                                activity,
+                                adUnitIdNormal,
+                                onAdClick = {},
+                                onAdImpression = {},
+                                onLoadSuccess = {
+                                    listAds.getOrPut(
+                                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                                        { MutableStateFlow(NativeAdState.Loaded(it)) }
+                                    )
+                                    onLoadSuccess()
+                                },
+                                onAdFailedToLoad = {
+                                    onLoadFailed()
+                                    listAds.remove(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))
+                                })
+                        }
+                    } else {
+                        onLoadFailed()
+                    }
+                },
+                onLoadSuccess = {
+                    listAds.getOrPut(
+                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                        { MutableStateFlow(NativeAdState.Loaded(it)) }
+                    )
+                    onLoadSuccess()
+                })
+        } else if (showNormal) {
+            AppAdMob.loadSingleNativeAds(
+                activity,
+                adUnitIdNormal,
+                onAdClick = {},
+                onAdImpression = {},
+                onLoadSuccess = {
+                    listAds.getOrPut(
+                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                        { MutableStateFlow(NativeAdState.Loaded(it)) }
+                    )
+                    onLoadSuccess()
+                },
+                onAdFailedToLoad = {
+                    onLoadFailed()
+                    listAds.remove(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))
+                })
+        } else {
+            Log.d(TAG, "dont preload for any ad")
+            return
+        }
     }
 
     @Composable
@@ -147,7 +229,7 @@ object NativeAdsController {
 
         LaunchedEffect(Unit) {
             if (listAds[adId] == null){
-                preloadAds(activity, adId)
+                preloadAds(activity, adUnitId = adId)
             }
         }
 

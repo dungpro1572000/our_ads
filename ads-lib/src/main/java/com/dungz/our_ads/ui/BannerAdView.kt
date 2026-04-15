@@ -37,7 +37,13 @@ import com.google.android.gms.ads.LoadAdError
 private enum class BannerAdStatus { Loading, Loaded, Failed }
 
 @Composable
-fun SmartBannerAd(adUnitId: String, modifier: Modifier = Modifier) {
+fun SmartBannerAd(
+    adUnitId: String,
+    modifier: Modifier = Modifier,
+    onAdLoaded: (() -> Unit)? = null,
+    onAdFailedToLoad: ((LoadAdError) -> Unit)? = null,
+    onAdImpression: (() -> Unit)? = null,
+) {
     val context = LocalContext.current
     var adStatus by remember { mutableStateOf(BannerAdStatus.Loading) }
     var adView by remember { mutableStateOf<AdView?>(null) }
@@ -60,12 +66,20 @@ fun SmartBannerAd(adUnitId: String, modifier: Modifier = Modifier) {
                     super.onAdFailedToLoad(p0)
                     adStatus = BannerAdStatus.Failed
                     AdLogger.error(AdLogger.TYPE_BANNER, "load banner failed: ${p0.message}")
+                    onAdFailedToLoad?.invoke(p0)
                 }
 
                 override fun onAdLoaded() {
                     super.onAdLoaded()
                     adStatus = BannerAdStatus.Loaded
                     AdLogger.debug(AdLogger.TYPE_BANNER, "load banner successfully")
+                    onAdLoaded?.invoke()
+                }
+
+                override fun onAdImpression() {
+                    super.onAdImpression()
+                    AdLogger.debug(AdLogger.TYPE_BANNER, "banner impression")
+                    onAdImpression?.invoke()
                 }
             }
             loadAd(AdRequest.Builder().build())

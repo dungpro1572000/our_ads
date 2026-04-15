@@ -47,6 +47,15 @@ class MainActivity : ComponentActivity() {
         private const val TEST_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712"
         private const val TEST_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917"
         private const val TEST_NATIVE_ID = "ca-app-pub-3940256099942544/2247696110"
+
+        // High/Normal test IDs: HIGH uses invalid ID to force fallback to NORMAL
+        private const val TEST_INVALID_ID = "ca-app-pub-0000000000000000/0000000000"
+        private const val TEST_INTERSTITIAL_HIGH_ID = TEST_INVALID_ID
+        private const val TEST_INTERSTITIAL_NORMAL_ID = TEST_INTERSTITIAL_ID
+        private const val TEST_REWARDED_HIGH_ID = TEST_INVALID_ID
+        private const val TEST_REWARDED_NORMAL_ID = TEST_REWARDED_ID
+        private const val TEST_NATIVE_HIGH_ID = TEST_INVALID_ID
+        private const val TEST_NATIVE_NORMAL_ID = TEST_NATIVE_ID
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -129,6 +138,36 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Show Interstitial") }
 
+            // --- Interstitial High/Normal (fallback demo) ---
+            Button(
+                onClick = {
+                    statusText = "Inter H/N: loading (high→normal fallback)..."
+                    scope.launch {
+                        InterAdsController.loadHighNormalIds(
+                            activity = WeakReference(activity),
+                            adUnitIdHigh = TEST_INTERSTITIAL_HIGH_ID,
+                            adUnitIdNormal = TEST_INTERSTITIAL_NORMAL_ID,
+                            onLoadFailed = { statusText = "Inter H/N: both failed" },
+                            onLoadSuccess = { statusText = "Inter H/N: loaded" }
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Load Inter High/Normal") }
+
+            Button(
+                onClick = {
+                    InterAdsController.showHighNormalIds(
+                        activity = WeakReference(activity),
+                        adUnitIdHigh = TEST_INTERSTITIAL_HIGH_ID,
+                        adUnitIdNormal = TEST_INTERSTITIAL_NORMAL_ID,
+                        onShowFailed = { statusText = "Inter H/N: show failed" },
+                        onShowSuccess = { statusText = "Inter H/N: dismissed" }
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Show Inter High/Normal") }
+
             // --- Rewarded ---
             Text("Rewarded Ad", style = MaterialTheme.typography.titleMedium)
             Button(
@@ -148,20 +187,51 @@ class MainActivity : ComponentActivity() {
 
             Button(
                 onClick = {
+                    RewardAdsController.showAds(
+                        activity = WeakReference(activity),
+                        adUnitId = TEST_REWARDED_ID,
+                        onUserEarn = {
+                            Toast.makeText(context, "Earned reward!", Toast.LENGTH_SHORT).show()
+                        },
+                        onShowFailed = { statusText = "Rewarded: show failed" },
+                        onShowSuccess = { statusText = "Rewarded: dismissed" }
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Show Rewarded") }
+
+            // --- Rewarded High/Normal (fallback demo) ---
+            Button(
+                onClick = {
+                    statusText = "Reward H/N: loading (high→normal fallback)..."
                     scope.launch {
-                        RewardAdsController.showAds(
+                        RewardAdsController.loadHighNormalIds(
                             activity = WeakReference(activity),
-                            adUnitId = TEST_REWARDED_ID,
-                            onUserEarn = {
-                                Toast.makeText(context, "Earned reward!", Toast.LENGTH_SHORT).show()
-                            },
-                            onShowFailed = { statusText = "Rewarded: show failed" },
-                            onShowSuccess = { statusText = "Rewarded: dismissed" }
+                            adUnitIdHigh = TEST_REWARDED_HIGH_ID,
+                            adUnitIdNormal = TEST_REWARDED_NORMAL_ID,
+                            onLoadFailed = { statusText = "Reward H/N: both failed" },
+                            onLoadSuccess = { statusText = "Reward H/N: loaded" }
                         )
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
-            ) { Text("Show Rewarded") }
+            ) { Text("Load Reward High/Normal") }
+
+            Button(
+                onClick = {
+                    RewardAdsController.showHighNormalIds(
+                        activity = WeakReference(activity),
+                        adUnitIdHigh = TEST_REWARDED_HIGH_ID,
+                        adUnitIdNormal = TEST_REWARDED_NORMAL_ID,
+                        onUserEarn = {
+                            Toast.makeText(context, "Earned reward (H/N)!", Toast.LENGTH_SHORT).show()
+                        },
+                        onShowFailed = { statusText = "Reward H/N: show failed" },
+                        onShowSuccess = { statusText = "Reward H/N: dismissed" }
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Show Reward High/Normal") }
 
             // --- Native ---
             Text("Native Ad", style = MaterialTheme.typography.titleMedium)
@@ -183,6 +253,23 @@ class MainActivity : ComponentActivity() {
                 adId = TEST_NATIVE_ID,
                 nativeLayout = com.dungz.our_ads.R.layout.native_ad_medium
             )
+
+            // --- Native High/Normal (fallback demo) ---
+            Button(
+                onClick = {
+                    statusText = "Native H/N: loading (high→normal fallback)..."
+                    scope.launch {
+                        NativeAdsController.loadHighNormalIds(
+                            activity = WeakReference(activity),
+                            adUnitIdHigh = TEST_NATIVE_HIGH_ID,
+                            adUnitIdNormal = TEST_NATIVE_NORMAL_ID,
+                            onLoadFailed = { statusText = "Native H/N: both failed" },
+                            onLoadSuccess = { statusText = "Native H/N: loaded" }
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Load Native High/Normal") }
 
             // --- Native Full Screen ---
             Text("Native Full Screen", style = MaterialTheme.typography.titleMedium)
