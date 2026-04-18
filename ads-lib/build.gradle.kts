@@ -80,7 +80,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.github.dungpro1572000"
                 artifactId = "our_ads"
-                version = "1.2.0"
+                version = "1.2.1"
 
                 // Đảm bảo transitive dependencies được khai báo trong POM
                 pom {

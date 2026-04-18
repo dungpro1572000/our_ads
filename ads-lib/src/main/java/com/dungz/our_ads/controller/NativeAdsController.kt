@@ -1,7 +1,6 @@
 package com.dungz.our_ads.controller
 
 import android.app.Activity
-import android.util.Log
 import android.view.LayoutInflater
 import android.widget.ImageButton
 import androidx.annotation.LayoutRes
@@ -55,17 +54,46 @@ object NativeAdsController {
         onLoadFailed: () -> Unit = {},
         onLoadSuccess: () -> Unit = {},
     ) {
-        if (!isShow || !canPreloadAds(adUnitId) || RemoteConfigData.get(RemoteConfigData.ENABLE_ADS) != true) return
+        if (!isShow) {
+            AdLogger.debug(AdLogger.TYPE_NATIVE, "preloadAds skipped (isShow=false): $adUnitId")
+            return
+        }
+        if (!canPreloadAds(adUnitId)) {
+            AdLogger.debug(
+                AdLogger.TYPE_NATIVE,
+                "preloadAds skipped (already loading/loaded): $adUnitId"
+            )
+            return
+        }
+        if (RemoteConfigData.get(RemoteConfigData.ENABLE_ADS) != true) {
+            AdLogger.warn(
+                AdLogger.TYPE_NATIVE,
+                "preloadAds skipped (ENABLE_ADS remote config is off): $adUnitId"
+            )
+            return
+        }
+        AdLogger.logLoading(AdLogger.TYPE_NATIVE, adUnitId, isHigher = false)
         listAds.getOrPut(adUnitId) { MutableStateFlow(NativeAdState.Loading) }
         listAds[adUnitId]?.emit(NativeAdState.Loading)
-        AppAdMob.loadSingleNativeAds(activity, adUnitId, {}, {
+        AppAdMob.loadSingleNativeAds(activity, adUnitId, {
+            AdLogger.logClicked(AdLogger.TYPE_NATIVE, adUnitId)
+        }, {
+            AdLogger.logImpression(AdLogger.TYPE_NATIVE, adUnitId)
         }, {
             listAds[adUnitId]?.value = NativeAdState.Failed(it)
+            AdLogger.logFailedToLoad(
+                AdLogger.TYPE_NATIVE,
+                adUnitId,
+                isHigher = false,
+                errorCode = it.code,
+                errorMessage = it.message
+            )
             AdLogger.error(AdLogger.TYPE_NATIVE, "onLoad ads failed by : ${it.message}")
             onLoadFailed()
         }, {
             listAds[adUnitId]?.value = NativeAdState.Loaded(it)
-            AdLogger.debug(AdLogger.TYPE_NATIVE, "onLoad ads successfully")
+            AdLogger.logLoaded(AdLogger.TYPE_NATIVE, adUnitId, isHigher = false)
+            AdLogger.debug(AdLogger.TYPE_NATIVE, "onLoad ads successfully: $adUnitId")
             onLoadSuccess()
         })
     }
@@ -79,63 +107,123 @@ object NativeAdsController {
         onLoadFailed: () -> Unit,
         onLoadSuccess: () -> Unit,
     ) {
-        if (!canPreloadAds(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))) return
+        val key = getHighNormalAdById(adUnitIdHigh, adUnitIdNormal)
+        if (!canPreloadAds(key)) {
+            AdLogger.debug(
+                AdLogger.TYPE_NATIVE,
+                "loadHighNormalIds skipped (already loading/loaded): $key"
+            )
+            return
+        }
         if (showHigh) {
+            AdLogger.logLoading(AdLogger.TYPE_NATIVE, adUnitIdHigh, isHigher = true)
             AppAdMob.loadSingleNativeAds(
                 activity,
                 adUnitIdHigh,
-                onAdClick = {},
-                onAdImpression = {},
+                onAdClick = { AdLogger.logClicked(AdLogger.TYPE_NATIVE, adUnitIdHigh) },
+                onAdImpression = { AdLogger.logImpression(AdLogger.TYPE_NATIVE, adUnitIdHigh) },
                 onAdFailedToLoad = {
+                    AdLogger.logFailedToLoad(
+                        AdLogger.TYPE_NATIVE,
+                        adUnitIdHigh,
+                        isHigher = true,
+                        errorCode = it.code,
+                        errorMessage = it.message
+                    )
                     if (showNormal) {
+                        AdLogger.logFallbackToNormal(AdLogger.TYPE_NATIVE, adUnitIdNormal)
                         scope.launch {
+                            AdLogger.logLoading(
+                                AdLogger.TYPE_NATIVE,
+                                adUnitIdNormal,
+                                isHigher = false
+                            )
                             AppAdMob.loadSingleNativeAds(
                                 activity,
                                 adUnitIdNormal,
-                                onAdClick = {},
-                                onAdImpression = {},
+                                onAdClick = {
+                                    AdLogger.logClicked(AdLogger.TYPE_NATIVE, adUnitIdNormal)
+                                },
+                                onAdImpression = {
+                                    AdLogger.logImpression(AdLogger.TYPE_NATIVE, adUnitIdNormal)
+                                },
                                 onLoadSuccess = {
+                                    AdLogger.logLoaded(
+                                        AdLogger.TYPE_NATIVE,
+                                        adUnitIdNormal,
+                                        isHigher = false
+                                    )
                                     listAds.getOrPut(
-                                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                                        key,
                                         { MutableStateFlow(NativeAdState.Loaded(it)) }
                                     )
                                     onLoadSuccess()
                                 },
                                 onAdFailedToLoad = {
+                                    AdLogger.logFailedToLoad(
+                                        AdLogger.TYPE_NATIVE,
+                                        adUnitIdNormal,
+                                        isHigher = false,
+                                        errorCode = it.code,
+                                        errorMessage = it.message
+                                    )
+                                    AdLogger.logAllRetriesExhausted(
+                                        AdLogger.TYPE_NATIVE,
+                                        adUnitIdHigh,
+                                        adUnitIdNormal,
+                                        totalRetries = 2
+                                    )
                                     onLoadFailed()
-                                    listAds.remove(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))
+                                    listAds.remove(key)
                                 })
                         }
                     } else {
+                        AdLogger.warn(
+                            AdLogger.TYPE_NATIVE,
+                            "Higher failed and showNormal=false, skipping fallback: $adUnitIdHigh"
+                        )
                         onLoadFailed()
                     }
                 },
                 onLoadSuccess = {
+                    AdLogger.logLoaded(AdLogger.TYPE_NATIVE, adUnitIdHigh, isHigher = true)
                     listAds.getOrPut(
-                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                        key,
                         { MutableStateFlow(NativeAdState.Loaded(it)) }
                     )
                     onLoadSuccess()
                 })
         } else if (showNormal) {
+            AdLogger.logLoading(AdLogger.TYPE_NATIVE, adUnitIdNormal, isHigher = false)
             AppAdMob.loadSingleNativeAds(
                 activity,
                 adUnitIdNormal,
-                onAdClick = {},
-                onAdImpression = {},
+                onAdClick = { AdLogger.logClicked(AdLogger.TYPE_NATIVE, adUnitIdNormal) },
+                onAdImpression = { AdLogger.logImpression(AdLogger.TYPE_NATIVE, adUnitIdNormal) },
                 onLoadSuccess = {
+                    AdLogger.logLoaded(AdLogger.TYPE_NATIVE, adUnitIdNormal, isHigher = false)
                     listAds.getOrPut(
-                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                        key,
                         { MutableStateFlow(NativeAdState.Loaded(it)) }
                     )
                     onLoadSuccess()
                 },
                 onAdFailedToLoad = {
+                    AdLogger.logFailedToLoad(
+                        AdLogger.TYPE_NATIVE,
+                        adUnitIdNormal,
+                        isHigher = false,
+                        errorCode = it.code,
+                        errorMessage = it.message
+                    )
                     onLoadFailed()
-                    listAds.remove(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))
+                    listAds.remove(key)
                 })
         } else {
-            Log.d(TAG, "dont preload for any ad")
+            AdLogger.debug(
+                AdLogger.TYPE_NATIVE,
+                "loadHighNormalIds skipped (showHigh=false, showNormal=false)"
+            )
             return
         }
     }
@@ -150,6 +238,10 @@ object NativeAdsController {
         DisposableEffect(lifecycleOwner) {
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_DESTROY) {
+                    AdLogger.debug(
+                        AdLogger.TYPE_NATIVE_FULLSCREEN,
+                        "Lifecycle ON_DESTROY, clearing ad: $adId"
+                    )
                     listAds.remove(adId)
                 }
             }
@@ -158,6 +250,10 @@ object NativeAdsController {
         }
         when (val state = listAds[adId]?.collectAsStateWithLifecycle()?.value) {
             is NativeAdState.Loading -> {
+                AdLogger.debug(
+                    AdLogger.TYPE_NATIVE_FULLSCREEN,
+                    "Rendering shimmer while loading: $adId"
+                )
                 if (shimmerAds != null) {
                     shimmerAds()
                 } else {
@@ -166,8 +262,12 @@ object NativeAdsController {
             }
 
             is NativeAdState.Loaded -> {
+                AdLogger.logShowing(AdLogger.TYPE_NATIVE_FULLSCREEN, adId, isHigher = false)
                 Dialog(
-                    onDismissRequest = onCloseClick,
+                    onDismissRequest = {
+                        AdLogger.logDismissed(AdLogger.TYPE_NATIVE_FULLSCREEN, adId)
+                        onCloseClick()
+                    },
                     properties = DialogProperties(
                         usePlatformDefaultWidth = false,
                         dismissOnBackPress = true,
@@ -180,6 +280,10 @@ object NativeAdsController {
                                 .inflate(R.layout.native_ad_fullscreen, null) as android.widget.FrameLayout
 
                             root.findViewById<ImageButton>(R.id.btn_close)?.setOnClickListener {
+                                AdLogger.debug(
+                                    AdLogger.TYPE_NATIVE_FULLSCREEN,
+                                    "Close button clicked: $adId"
+                                )
                                 onCloseClick()
                             }
 
@@ -204,7 +308,26 @@ object NativeAdsController {
                 }
             }
 
-            else -> {}
+            is NativeAdState.Failed -> {
+                AdLogger.error(
+                    AdLogger.TYPE_NATIVE_FULLSCREEN,
+                    "Render skipped (state=Failed): $adId | ${state.e.message}"
+                )
+            }
+
+            NativeAdState.NotLoaded -> {
+                AdLogger.debug(
+                    AdLogger.TYPE_NATIVE_FULLSCREEN,
+                    "Render skipped (state=NotLoaded): $adId"
+                )
+            }
+
+            null -> {
+                AdLogger.debug(
+                    AdLogger.TYPE_NATIVE_FULLSCREEN,
+                    "Render skipped (no state registered for key): $adId"
+                )
+            }
         }
     }
 
@@ -220,6 +343,10 @@ object NativeAdsController {
         DisposableEffect(lifecycleOwner) {
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_DESTROY) {
+                    AdLogger.debug(
+                        AdLogger.TYPE_NATIVE,
+                        "Lifecycle ON_DESTROY, clearing ad: $adId"
+                    )
                     listAds.remove(adId)
                 }
             }
@@ -228,13 +355,23 @@ object NativeAdsController {
         }
 
         LaunchedEffect(Unit) {
-            if (listAds[adId] == null){
+            if (listAds[adId] == null) {
+                AdLogger.debug(
+                    AdLogger.TYPE_NATIVE,
+                    "MediumNativeContainerAdView: no cached ad, triggering preload: $adId"
+                )
                 preloadAds(activity, adUnitId = adId)
+            } else {
+                AdLogger.debug(
+                    AdLogger.TYPE_NATIVE,
+                    "MediumNativeContainerAdView: reusing cached ad: $adId"
+                )
             }
         }
 
         when (val state = listAds[adId]?.collectAsStateWithLifecycle()?.value) {
             is NativeAdState.Loading -> {
+                AdLogger.debug(AdLogger.TYPE_NATIVE, "Rendering shimmer while loading: $adId")
                 if (shimmerAds != null) {
                     shimmerAds()
                 } else {
@@ -243,6 +380,7 @@ object NativeAdsController {
             }
 
             is NativeAdState.Loaded -> {
+                AdLogger.logShowing(AdLogger.TYPE_NATIVE, adId, isHigher = false)
                 AndroidView(
                     factory = { context -> inflateNativeAdView(context, nativeLayout) },
                     modifier = modifier.fillMaxWidth(),
@@ -250,7 +388,23 @@ object NativeAdsController {
                 )
             }
 
-            else -> {}
+            is NativeAdState.Failed -> {
+                AdLogger.error(
+                    AdLogger.TYPE_NATIVE,
+                    "Render skipped (state=Failed): $adId | ${state.e.message}"
+                )
+            }
+
+            NativeAdState.NotLoaded -> {
+                AdLogger.debug(AdLogger.TYPE_NATIVE, "Render skipped (state=NotLoaded): $adId")
+            }
+
+            null -> {
+                AdLogger.debug(
+                    AdLogger.TYPE_NATIVE,
+                    "Render skipped (no state registered for key): $adId"
+                )
+            }
         }
     }
 }

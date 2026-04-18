@@ -1,7 +1,6 @@
 package com.dungz.our_ads.controller
 
 import android.app.Activity
-import android.util.Log
 import com.dungz.our_ads.AppAdMob
 import com.dungz.our_ads.state.RewardAdState
 import com.dungz.our_ads.utils.AdLogger
@@ -31,15 +30,34 @@ object RewardAdsController {
         onLoadFailed: () -> Unit = {},
         onLoadSuccess: () -> Unit = {},
     ) {
-        if (!isShow || !canPreloadAds(adUnitId)) return
+        if (!isShow) {
+            AdLogger.debug(AdLogger.TYPE_REWARDED, "preloadAds skipped (isShow=false): $adUnitId")
+            return
+        }
+        if (!canPreloadAds(adUnitId)) {
+            AdLogger.debug(
+                AdLogger.TYPE_REWARDED,
+                "preloadAds skipped (already loading/loaded): $adUnitId"
+            )
+            return
+        }
+        AdLogger.logLoading(AdLogger.TYPE_REWARDED, adUnitId, isHigher = false)
         listAds[adUnitId]?.value = RewardAdState.Loading
         AppAdMob.loadRewardAds(activity, adUnitId, {
             listAds[adUnitId]?.value = RewardAdState.Failed(it)
+            AdLogger.logFailedToLoad(
+                AdLogger.TYPE_REWARDED,
+                adUnitId,
+                isHigher = false,
+                errorCode = it.code,
+                errorMessage = it.message
+            )
             AdLogger.error(AdLogger.TYPE_REWARDED, "onLoad ads failed by : ${it.message}")
             onLoadFailed()
         }, {
             listAds[adUnitId]?.value = RewardAdState.Loaded(it)
-            AdLogger.debug(AdLogger.TYPE_REWARDED, "onLoad ads successfully")
+            AdLogger.logLoaded(AdLogger.TYPE_REWARDED, adUnitId, isHigher = false)
+            AdLogger.debug(AdLogger.TYPE_REWARDED, "onLoad ads successfully: $adUnitId")
             onLoadSuccess()
         })
     }
@@ -53,27 +71,39 @@ object RewardAdsController {
         onShowSuccess: () -> Unit,
     ) {
         if (!isShow || listAds[adUnitId]?.value !is RewardAdState.Loaded || listAds[adUnitId] == null) {
+            AdLogger.warn(
+                AdLogger.TYPE_REWARDED,
+                "showAds skipped: $adUnitId (isShow=$isShow, state=${listAds[adUnitId]?.value})"
+            )
             onShowFailed()
             return
         }
         listAds[adUnitId]?.let {
             if (it.value is RewardAdState.Loaded) {
+                AdLogger.logShowing(AdLogger.TYPE_REWARDED, adUnitId, isHigher = false)
                 AppAdMob.showRewardAds(
                     activity,
                     (it.value as RewardAdState.Loaded).rewardedAd,
-                    {
+                    { rewardItem ->
+                        AdLogger.logRewardEarned(
+                            AdLogger.TYPE_REWARDED,
+                            rewardType = rewardItem.type,
+                            rewardAmount = rewardItem.amount
+                        )
                         onUserEarn()
                     },
                     {
                         listAds.remove(adUnitId)
+                        AdLogger.logDismissed(AdLogger.TYPE_REWARDED, adUnitId)
                         AdLogger.debug(AdLogger.TYPE_REWARDED, "onShow ads successfully")
                         onShowSuccess()
                     },
                     {
                         listAds.remove(adUnitId)
-                        AdLogger.error(
+                        AdLogger.logFailedToShow(
                             AdLogger.TYPE_REWARDED,
-                            "onShow ads failed by : ${it.message}"
+                            adUnitId,
+                            it.message
                         )
                         onShowFailed()
                     })
@@ -90,57 +120,113 @@ object RewardAdsController {
         onLoadFailed: () -> Unit,
         onLoadSuccess: () -> Unit,
     ) {
-        if (!canPreloadAds(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))) return
+        val key = getHighNormalAdById(adUnitIdHigh, adUnitIdNormal)
+        if (!canPreloadAds(key)) {
+            AdLogger.debug(
+                AdLogger.TYPE_REWARDED,
+                "loadHighNormalIds skipped (already loading/loaded): $key"
+            )
+            return
+        }
         if (showHigh) {
+            AdLogger.logLoading(AdLogger.TYPE_REWARDED, adUnitIdHigh, isHigher = true)
             AppAdMob.loadRewardAds(
                 activity,
                 adUnitIdHigh,
                 onAdFailedToLoad = {
+                    AdLogger.logFailedToLoad(
+                        AdLogger.TYPE_REWARDED,
+                        adUnitIdHigh,
+                        isHigher = true,
+                        errorCode = it.code,
+                        errorMessage = it.message
+                    )
                     if (showNormal) {
+                        AdLogger.logFallbackToNormal(AdLogger.TYPE_REWARDED, adUnitIdNormal)
                         scope.launch {
+                            AdLogger.logLoading(
+                                AdLogger.TYPE_REWARDED,
+                                adUnitIdNormal,
+                                isHigher = false
+                            )
                             AppAdMob.loadRewardAds(
                                 activity,
                                 adUnitIdNormal,
                                 onLoadSuccess = {
+                                    AdLogger.logLoaded(
+                                        AdLogger.TYPE_REWARDED,
+                                        adUnitIdNormal,
+                                        isHigher = false
+                                    )
                                     listAds.getOrPut(
-                                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                                        key,
                                         { MutableStateFlow(RewardAdState.Loaded(it)) }
                                     )
                                     onLoadSuccess()
                                 },
                                 onAdFailedToLoad = {
+                                    AdLogger.logFailedToLoad(
+                                        AdLogger.TYPE_REWARDED,
+                                        adUnitIdNormal,
+                                        isHigher = false,
+                                        errorCode = it.code,
+                                        errorMessage = it.message
+                                    )
+                                    AdLogger.logAllRetriesExhausted(
+                                        AdLogger.TYPE_REWARDED,
+                                        adUnitIdHigh,
+                                        adUnitIdNormal,
+                                        totalRetries = 2
+                                    )
                                     onLoadFailed()
-                                    listAds.remove(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))
+                                    listAds.remove(key)
                                 })
                         }
                     } else {
+                        AdLogger.warn(
+                            AdLogger.TYPE_REWARDED,
+                            "Higher failed and showNormal=false, skipping fallback: $adUnitIdHigh"
+                        )
                         onLoadFailed()
                     }
                 },
                 onLoadSuccess = {
+                    AdLogger.logLoaded(AdLogger.TYPE_REWARDED, adUnitIdHigh, isHigher = true)
                     listAds.getOrPut(
-                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                        key,
                         { MutableStateFlow(RewardAdState.Loaded(it)) }
                     )
                     onLoadSuccess()
                 })
         } else if (showNormal) {
+            AdLogger.logLoading(AdLogger.TYPE_REWARDED, adUnitIdNormal, isHigher = false)
             AppAdMob.loadRewardAds(
                 activity,
                 adUnitIdNormal,
                 onLoadSuccess = {
+                    AdLogger.logLoaded(AdLogger.TYPE_REWARDED, adUnitIdNormal, isHigher = false)
                     listAds.getOrPut(
-                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                        key,
                         { MutableStateFlow(RewardAdState.Loaded(it)) }
                     )
                     onLoadSuccess()
                 },
                 onAdFailedToLoad = {
+                    AdLogger.logFailedToLoad(
+                        AdLogger.TYPE_REWARDED,
+                        adUnitIdNormal,
+                        isHigher = false,
+                        errorCode = it.code,
+                        errorMessage = it.message
+                    )
                     onLoadFailed()
-                    listAds.remove(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))
+                    listAds.remove(key)
                 })
         } else {
-            Log.d(TAG, "dont preload for any ad")
+            AdLogger.debug(
+                AdLogger.TYPE_REWARDED,
+                "loadHighNormalIds skipped (showHigh=false, showNormal=false)"
+            )
             return
         }
     }
@@ -155,21 +241,20 @@ object RewardAdsController {
         onShowFailed: () -> Unit,
         onShowSuccess: () -> Unit,
     ) {
-        if (listAds[getHighNormalAdById(
-                adUnitIdHigh,
-                adUnitIdNormal
-            )]?.value !is RewardAdState.Loaded || listAds[getHighNormalAdById(
-                adUnitIdHigh,
-                adUnitIdNormal
-            )] == null
-        ) {
+        val key = getHighNormalAdById(adUnitIdHigh, adUnitIdNormal)
+        if (listAds[key]?.value !is RewardAdState.Loaded || listAds[key] == null) {
+            AdLogger.warn(
+                AdLogger.TYPE_REWARDED,
+                "showHighNormalIds skipped: $key (state=${listAds[key]?.value})"
+            )
             onShowFailed()
             return
         }
+        AdLogger.debug(AdLogger.TYPE_REWARDED, "showHighNormalIds dispatching to showAds: $key")
         showAds(
             activity,
             showHigh || showNormal,
-            getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+            key,
             onUserEarn,
             onShowFailed,
             onShowSuccess

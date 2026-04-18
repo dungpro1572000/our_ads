@@ -1,7 +1,6 @@
 package com.dungz.our_ads.controller
 
 import android.app.Activity
-import android.util.Log
 import com.dungz.our_ads.AppAdMob
 import com.dungz.our_ads.state.InterAdState
 import com.dungz.our_ads.utils.AdLogger
@@ -31,13 +30,23 @@ object InterAdsController {
         onLoadFailed: () -> Unit,
         onLoadSuccess: () -> Unit,
     ) {
-        if (!isShow || !canPreloadAds(adUnitId)) return
+        if (!isShow) {
+            AdLogger.debug(AdLogger.TYPE_INTERSTITIAL, "preloadAds skipped (isShow=false): $adUnitId")
+            return
+        }
+        if (!canPreloadAds(adUnitId)) {
+            AdLogger.debug(AdLogger.TYPE_INTERSTITIAL, "preloadAds skipped (already loading/loaded): $adUnitId")
+            return
+        }
+        AdLogger.logLoading(AdLogger.TYPE_INTERSTITIAL, adUnitId, isHigher = false)
         listAds[adUnitId]?.value = InterAdState.Loading
         AppAdMob.loadInterstitialAds(activity, adUnitId, {
             listAds[adUnitId]?.value = InterAdState.Failed(it)
+            AdLogger.error(AdLogger.TYPE_INTERSTITIAL, "onLoad ads failed by : ${it.message}")
             onLoadFailed()
         }, {
             listAds[adUnitId]?.value = InterAdState.Loaded(it)
+            AdLogger.debug(AdLogger.TYPE_INTERSTITIAL, "onLoad ads successfully: $adUnitId")
             onLoadSuccess()
         })
     }
@@ -50,24 +59,31 @@ object InterAdsController {
         onShowSuccess: () -> Unit,
     ) {
         if (!isShow || listAds[adUnitId]?.value !is InterAdState.Loaded || listAds[adUnitId] == null) {
+            AdLogger.warn(
+                AdLogger.TYPE_INTERSTITIAL,
+                "showAds skipped: $adUnitId (isShow=$isShow, state=${listAds[adUnitId]?.value})"
+            )
             onShowFailed()
             return
         }
         listAds[adUnitId]?.let {
             if (it.value is InterAdState.Loaded) {
+                AdLogger.logShowing(AdLogger.TYPE_INTERSTITIAL, adUnitId, isHigher = false)
                 AppAdMob.showInterstitialAd(
                     activity,
                     (it.value as InterAdState.Loaded).interstitialAd,
                     {
                         listAds.remove(adUnitId)
+                        AdLogger.logDismissed(AdLogger.TYPE_INTERSTITIAL, adUnitId)
                         AdLogger.debug(AdLogger.TYPE_INTERSTITIAL, "onShow ads successfully")
                         onShowSuccess()
                     },
                     {
                         listAds.remove(adUnitId)
-                        AdLogger.error(
+                        AdLogger.logFailedToShow(
                             AdLogger.TYPE_INTERSTITIAL,
-                            "onShow ads failed by : ${it.message}"
+                            adUnitId,
+                            it.message
                         )
                         onShowFailed()
                     })
@@ -84,57 +100,121 @@ object InterAdsController {
         onLoadFailed: () -> Unit,
         onLoadSuccess: () -> Unit,
     ) {
-        if (!canPreloadAds(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))) return
+        val key = getHighNormalAdById(adUnitIdHigh, adUnitIdNormal)
+        if (!canPreloadAds(key)) {
+            AdLogger.debug(
+                AdLogger.TYPE_INTERSTITIAL,
+                "loadHighNormalIds skipped (already loading/loaded): $key"
+            )
+            return
+        }
         if (showHigh) {
+            AdLogger.logLoading(AdLogger.TYPE_INTERSTITIAL, adUnitIdHigh, isHigher = true)
             AppAdMob.loadInterstitialAds(
                 activity,
                 adUnitIdHigh,
                 onAdFailedToLoad = {
+                    AdLogger.logFailedToLoad(
+                        AdLogger.TYPE_INTERSTITIAL,
+                        adUnitIdHigh,
+                        isHigher = true,
+                        errorCode = it.code,
+                        errorMessage = it.message
+                    )
                     if (showNormal) {
+                        AdLogger.logFallbackToNormal(AdLogger.TYPE_INTERSTITIAL, adUnitIdNormal)
                         scope.launch {
+                            AdLogger.logLoading(
+                                AdLogger.TYPE_INTERSTITIAL,
+                                adUnitIdNormal,
+                                isHigher = false
+                            )
                             AppAdMob.loadInterstitialAds(
                                 activity,
                                 adUnitIdNormal,
                                 onLoadSuccess = {
+                                    AdLogger.logLoaded(
+                                        AdLogger.TYPE_INTERSTITIAL,
+                                        adUnitIdNormal,
+                                        isHigher = false
+                                    )
                                     listAds.getOrPut(
-                                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                                        key,
                                         { MutableStateFlow(InterAdState.Loaded(it)) }
                                     )
                                     onLoadSuccess()
                                 },
                                 onAdFailedToLoad = {
+                                    AdLogger.logFailedToLoad(
+                                        AdLogger.TYPE_INTERSTITIAL,
+                                        adUnitIdNormal,
+                                        isHigher = false,
+                                        errorCode = it.code,
+                                        errorMessage = it.message
+                                    )
+                                    AdLogger.logAllRetriesExhausted(
+                                        AdLogger.TYPE_INTERSTITIAL,
+                                        adUnitIdHigh,
+                                        adUnitIdNormal,
+                                        totalRetries = 2
+                                    )
                                     onLoadFailed()
-                                    listAds.remove(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))
+                                    listAds.remove(key)
                                 })
                         }
                     } else {
+                        AdLogger.warn(
+                            AdLogger.TYPE_INTERSTITIAL,
+                            "Higher failed and showNormal=false, skipping fallback: $adUnitIdHigh"
+                        )
                         onLoadFailed()
                     }
                 },
                 onLoadSuccess = {
+                    AdLogger.logLoaded(
+                        AdLogger.TYPE_INTERSTITIAL,
+                        adUnitIdHigh,
+                        isHigher = true
+                    )
                     listAds.getOrPut(
-                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                        key,
                         { MutableStateFlow(InterAdState.Loaded(it)) }
                     )
                     onLoadSuccess()
                 })
         } else if (showNormal) {
+            AdLogger.logLoading(AdLogger.TYPE_INTERSTITIAL, adUnitIdNormal, isHigher = false)
             AppAdMob.loadInterstitialAds(
                 activity,
                 adUnitIdNormal,
                 onLoadSuccess = {
+                    AdLogger.logLoaded(
+                        AdLogger.TYPE_INTERSTITIAL,
+                        adUnitIdNormal,
+                        isHigher = false
+                    )
                     listAds.getOrPut(
-                        getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+                        key,
                         { MutableStateFlow(InterAdState.Loaded(it)) }
                     )
                     onLoadSuccess()
                 },
                 onAdFailedToLoad = {
+                    AdLogger.logFailedToLoad(
+                        AdLogger.TYPE_INTERSTITIAL,
+                        adUnitIdNormal,
+                        isHigher = false,
+                        errorCode = it.code,
+                        errorMessage = it.message
+                    )
                     onLoadFailed()
-                    listAds.remove(getHighNormalAdById(adUnitIdHigh, adUnitIdNormal))
+                    listAds.remove(key)
                 })
         } else {
-            Log.d(TAG, "dont preload for any ad")
+            AdLogger.debug(
+                AdLogger.TYPE_INTERSTITIAL,
+                "loadHighNormalIds skipped (showHigh=false, showNormal=false)"
+            )
             return
         }
     }
@@ -148,21 +228,20 @@ object InterAdsController {
         onShowFailed: () -> Unit,
         onShowSuccess: () -> Unit,
     ) {
-        if (listAds[getHighNormalAdById(
-                adUnitIdHigh,
-                adUnitIdNormal
-            )]?.value !is InterAdState.Loaded || listAds[getHighNormalAdById(
-                adUnitIdHigh,
-                adUnitIdNormal
-            )] == null
-        ) {
+        val key = getHighNormalAdById(adUnitIdHigh, adUnitIdNormal)
+        if (listAds[key]?.value !is InterAdState.Loaded || listAds[key] == null) {
+            AdLogger.warn(
+                AdLogger.TYPE_INTERSTITIAL,
+                "showHighNormalIds skipped: $key (state=${listAds[key]?.value})"
+            )
             onShowFailed()
             return
         }
+        AdLogger.debug(AdLogger.TYPE_INTERSTITIAL, "showHighNormalIds dispatching to showAds: $key")
         showAds(
             activity,
             showHigh || showNormal,
-            getHighNormalAdById(adUnitIdHigh, adUnitIdNormal),
+            key,
             onShowFailed,
             onShowSuccess
         )
