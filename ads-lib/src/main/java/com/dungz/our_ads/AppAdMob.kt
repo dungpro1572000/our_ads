@@ -136,7 +136,9 @@ object AppAdMob {
         activity: WeakReference<Activity>,
         interstitialAd: InterstitialAd,
         onAdDismissed: () -> Unit,
-        onAdFailedToShow: (adError: AdError) -> Unit
+        onAdFailedToShow: (adError: AdError) -> Unit,
+        onAdClicked: () -> Unit = {},
+        onAdImpression: () -> Unit = {},
     ) {
         interstitialAd.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
@@ -145,6 +147,14 @@ object AppAdMob {
 
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                 onAdFailedToShow(adError)
+            }
+
+            override fun onAdClicked() {
+                onAdClicked()
+            }
+
+            override fun onAdImpression() {
+                onAdImpression()
             }
         }
         activity.get()?.let { interstitialAd.show(it) }
@@ -181,7 +191,9 @@ object AppAdMob {
         rewardedAd: RewardedAd,
         onUserEarnedReward: (reward: RewardItem) -> Unit,
         onAdDismissed: () -> Unit,
-        onAdFailedToShow: (adError: AdError) -> Unit
+        onAdFailedToShow: (adError: AdError) -> Unit,
+        onAdClicked: () -> Unit = {},
+        onAdImpression: () -> Unit = {},
     ) {
         rewardedAd.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
@@ -190,6 +202,14 @@ object AppAdMob {
 
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                 onAdFailedToShow(adError)
+            }
+
+            override fun onAdClicked() {
+                onAdClicked()
+            }
+
+            override fun onAdImpression() {
+                onAdImpression()
             }
         }
         activity.get()?.let {

@@ -40,10 +40,13 @@ private enum class BannerAdStatus { Loading, Loaded, Failed }
 fun SmartBannerAd(
     adUnitId: String,
     modifier: Modifier = Modifier,
+    isShow: Boolean = true,
     onAdLoaded: (() -> Unit)? = null,
     onAdFailedToLoad: ((LoadAdError) -> Unit)? = null,
     onAdImpression: (() -> Unit)? = null,
 ) {
+    if (!isShow) return
+
     val context = LocalContext.current
     var adStatus by remember { mutableStateOf(BannerAdStatus.Loading) }
     var adView by remember { mutableStateOf<AdView?>(null) }

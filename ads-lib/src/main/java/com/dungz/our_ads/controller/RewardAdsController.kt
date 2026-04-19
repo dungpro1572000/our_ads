@@ -42,7 +42,7 @@ object RewardAdsController {
             return
         }
         AdLogger.logLoading(AdLogger.TYPE_REWARDED, adUnitId, isHigher = false)
-        listAds[adUnitId]?.value = RewardAdState.Loading
+        listAds.getOrPut(adUnitId) { MutableStateFlow(RewardAdState.Loading) }.value = RewardAdState.Loading
         AppAdMob.loadRewardAds(activity, adUnitId, {
             listAds[adUnitId]?.value = RewardAdState.Failed(it)
             AdLogger.logFailedToLoad(
@@ -84,7 +84,7 @@ object RewardAdsController {
                 AppAdMob.showRewardAds(
                     activity,
                     (it.value as RewardAdState.Loaded).rewardedAd,
-                    { rewardItem ->
+                    onUserEarnedReward = { rewardItem ->
                         AdLogger.logRewardEarned(
                             AdLogger.TYPE_REWARDED,
                             rewardType = rewardItem.type,
@@ -92,13 +92,13 @@ object RewardAdsController {
                         )
                         onUserEarn()
                     },
-                    {
+                    onAdDismissed = {
                         listAds.remove(adUnitId)
                         AdLogger.logDismissed(AdLogger.TYPE_REWARDED, adUnitId)
                         AdLogger.debug(AdLogger.TYPE_REWARDED, "onShow ads successfully")
                         onShowSuccess()
                     },
-                    {
+                    onAdFailedToShow = {
                         listAds.remove(adUnitId)
                         AdLogger.logFailedToShow(
                             AdLogger.TYPE_REWARDED,
@@ -106,6 +106,12 @@ object RewardAdsController {
                             it.message
                         )
                         onShowFailed()
+                    },
+                    onAdClicked = {
+                        AdLogger.logClicked(AdLogger.TYPE_REWARDED, adUnitId)
+                    },
+                    onAdImpression = {
+                        AdLogger.logImpression(AdLogger.TYPE_REWARDED, adUnitId)
                     })
             }
         }

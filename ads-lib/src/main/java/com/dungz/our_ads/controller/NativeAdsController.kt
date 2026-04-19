@@ -231,10 +231,13 @@ object NativeAdsController {
     @Composable
     fun FullScreenNativeContainerAdView(
         adId: String,
+        isShow: Boolean = true,
         lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current,
         shimmerAds: (@Composable () -> Unit)? = null,
         onCloseClick: () -> Unit
     ) {
+        if (!isShow) return
+
         DisposableEffect(lifecycleOwner) {
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_DESTROY) {
@@ -336,10 +339,13 @@ object NativeAdsController {
         modifier: Modifier = Modifier,
         activity: WeakReference<Activity>,
         adId: String,
+        isShow: Boolean = true,
         lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current,
         @LayoutRes nativeLayout: Int = R.layout.native_ad_medium,
         shimmerAds: (@Composable () -> Unit)? = null
     ) {
+        if (!isShow) return
+
         DisposableEffect(lifecycleOwner) {
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_DESTROY) {

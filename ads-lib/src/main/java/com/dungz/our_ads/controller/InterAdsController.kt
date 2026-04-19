@@ -39,7 +39,7 @@ object InterAdsController {
             return
         }
         AdLogger.logLoading(AdLogger.TYPE_INTERSTITIAL, adUnitId, isHigher = false)
-        listAds[adUnitId]?.value = InterAdState.Loading
+        listAds.getOrPut(adUnitId) { MutableStateFlow(InterAdState.Loading) }.value = InterAdState.Loading
         AppAdMob.loadInterstitialAds(activity, adUnitId, {
             listAds[adUnitId]?.value = InterAdState.Failed(it)
             AdLogger.error(AdLogger.TYPE_INTERSTITIAL, "onLoad ads failed by : ${it.message}")
@@ -72,13 +72,13 @@ object InterAdsController {
                 AppAdMob.showInterstitialAd(
                     activity,
                     (it.value as InterAdState.Loaded).interstitialAd,
-                    {
+                    onAdDismissed = {
                         listAds.remove(adUnitId)
                         AdLogger.logDismissed(AdLogger.TYPE_INTERSTITIAL, adUnitId)
                         AdLogger.debug(AdLogger.TYPE_INTERSTITIAL, "onShow ads successfully")
                         onShowSuccess()
                     },
-                    {
+                    onAdFailedToShow = {
                         listAds.remove(adUnitId)
                         AdLogger.logFailedToShow(
                             AdLogger.TYPE_INTERSTITIAL,
@@ -86,6 +86,12 @@ object InterAdsController {
                             it.message
                         )
                         onShowFailed()
+                    },
+                    onAdClicked = {
+                        AdLogger.logClicked(AdLogger.TYPE_INTERSTITIAL, adUnitId)
+                    },
+                    onAdImpression = {
+                        AdLogger.logImpression(AdLogger.TYPE_INTERSTITIAL, adUnitId)
                     })
             }
         }
