@@ -66,35 +66,32 @@ object InterAdsController {
             onShowFailed()
             return
         }
-        listAds[adUnitId]?.let {
-            if (it.value is InterAdState.Loaded) {
-                AdLogger.logShowing(AdLogger.TYPE_INTERSTITIAL, adUnitId, isHigher = false)
-                AppAdMob.showInterstitialAd(
-                    activity,
-                    (it.value as InterAdState.Loaded).interstitialAd,
-                    onAdDismissed = {
-                        listAds.remove(adUnitId)
-                        AdLogger.logDismissed(AdLogger.TYPE_INTERSTITIAL, adUnitId)
-                        AdLogger.debug(AdLogger.TYPE_INTERSTITIAL, "onShow ads successfully")
-                        onShowSuccess()
-                    },
-                    onAdFailedToShow = {
-                        listAds.remove(adUnitId)
-                        AdLogger.logFailedToShow(
-                            AdLogger.TYPE_INTERSTITIAL,
-                            adUnitId,
-                            it.message
-                        )
-                        onShowFailed()
-                    },
-                    onAdClicked = {
-                        AdLogger.logClicked(AdLogger.TYPE_INTERSTITIAL, adUnitId)
-                    },
-                    onAdImpression = {
-                        AdLogger.logImpression(AdLogger.TYPE_INTERSTITIAL, adUnitId)
-                    })
-            }
-        }
+        val ad = (listAds[adUnitId]?.value as? InterAdState.Loaded)?.interstitialAd ?: return
+        // Remove immediately to prevent duplicate show from another screen
+        listAds.remove(adUnitId)
+        AdLogger.logShowing(AdLogger.TYPE_INTERSTITIAL, adUnitId, isHigher = false)
+        AppAdMob.showInterstitialAd(
+            activity,
+            ad,
+            onAdDismissed = {
+                AdLogger.logDismissed(AdLogger.TYPE_INTERSTITIAL, adUnitId)
+                AdLogger.debug(AdLogger.TYPE_INTERSTITIAL, "onShow ads successfully")
+                onShowSuccess()
+            },
+            onAdFailedToShow = {
+                AdLogger.logFailedToShow(
+                    AdLogger.TYPE_INTERSTITIAL,
+                    adUnitId,
+                    it.message
+                )
+                onShowFailed()
+            },
+            onAdClicked = {
+                AdLogger.logClicked(AdLogger.TYPE_INTERSTITIAL, adUnitId)
+            },
+            onAdImpression = {
+                AdLogger.logImpression(AdLogger.TYPE_INTERSTITIAL, adUnitId)
+            })
     }
 
     suspend fun loadHighNormalIds(

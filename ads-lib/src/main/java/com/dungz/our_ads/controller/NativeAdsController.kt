@@ -9,7 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -251,21 +255,22 @@ object NativeAdsController {
             lifecycleOwner.lifecycle.addObserver(observer)
             onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
         }
-        when (val state = listAds[adId]?.collectAsStateWithLifecycle()?.value) {
-            is NativeAdState.Loading -> {
-                AdLogger.debug(
-                    AdLogger.TYPE_NATIVE_FULLSCREEN,
-                    "Rendering shimmer while loading: $adId"
-                )
-                if (shimmerAds != null) {
-                    shimmerAds()
-                } else {
-                    DefaultNativeAdShimmer()
-                }
-            }
+        // Remember ad locally so removing from map doesn't break rendering
+        var consumedAd by remember { mutableStateOf<com.google.android.gms.ads.nativead.NativeAd?>(null) }
+        val state = listAds[adId]?.collectAsStateWithLifecycle()?.value
 
-            is NativeAdState.Loaded -> {
+        // Consume ad: save locally and remove from map to prevent duplicate show
+        LaunchedEffect(state) {
+            if (state is NativeAdState.Loaded && consumedAd == null) {
+                consumedAd = state.nativeAd
+                listAds.remove(adId)
                 AdLogger.logShowing(AdLogger.TYPE_NATIVE_FULLSCREEN, adId, isHigher = false)
+            }
+        }
+
+        when {
+            consumedAd != null -> {
+                val nativeAd = consumedAd!!
                 Dialog(
                     onDismissRequest = {
                         AdLogger.logDismissed(AdLogger.TYPE_NATIVE_FULLSCREEN, adId)
@@ -299,33 +304,45 @@ object NativeAdsController {
                             adView.advertiserView = adView.findViewById(R.id.ad_advertiser)
                             adView.starRatingView = adView.findViewById(R.id.ad_stars)
 
-                            bindNativeAd(adView, state.nativeAd)
+                            bindNativeAd(adView, nativeAd)
                             root
                         },
                         modifier = Modifier.fillMaxSize(),
                         update = { root ->
                             val adView = root.findViewById<NativeAdView>(R.id.native_ad_view)
-                            bindNativeAd(adView, state.nativeAd)
+                            bindNativeAd(adView, nativeAd)
                         }
                     )
                 }
             }
 
-            is NativeAdState.Failed -> {
+            state is NativeAdState.Loading -> {
+                AdLogger.debug(
+                    AdLogger.TYPE_NATIVE_FULLSCREEN,
+                    "Rendering shimmer while loading: $adId"
+                )
+                if (shimmerAds != null) {
+                    shimmerAds()
+                } else {
+                    DefaultNativeAdShimmer()
+                }
+            }
+
+            state is NativeAdState.Failed -> {
                 AdLogger.error(
                     AdLogger.TYPE_NATIVE_FULLSCREEN,
                     "Render skipped (state=Failed): $adId | ${state.e.message}"
                 )
             }
 
-            NativeAdState.NotLoaded -> {
+            state is NativeAdState.NotLoaded -> {
                 AdLogger.debug(
                     AdLogger.TYPE_NATIVE_FULLSCREEN,
                     "Render skipped (state=NotLoaded): $adId"
                 )
             }
 
-            null -> {
+            else -> {
                 AdLogger.debug(
                     AdLogger.TYPE_NATIVE_FULLSCREEN,
                     "Render skipped (no state registered for key): $adId"
@@ -360,6 +377,10 @@ object NativeAdsController {
             onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
         }
 
+        // Remember ad locally so removing from map doesn't break rendering
+        var consumedAd by remember { mutableStateOf<com.google.android.gms.ads.nativead.NativeAd?>(null) }
+        val state = listAds[adId]?.collectAsStateWithLifecycle()?.value
+
         LaunchedEffect(Unit) {
             if (listAds[adId] == null) {
                 AdLogger.debug(
@@ -375,8 +396,25 @@ object NativeAdsController {
             }
         }
 
-        when (val state = listAds[adId]?.collectAsStateWithLifecycle()?.value) {
-            is NativeAdState.Loading -> {
+        // Consume ad: save locally and remove from map to prevent duplicate show
+        LaunchedEffect(state) {
+            if (state is NativeAdState.Loaded && consumedAd == null) {
+                consumedAd = state.nativeAd
+                listAds.remove(adId)
+                AdLogger.logShowing(AdLogger.TYPE_NATIVE, adId, isHigher = false)
+            }
+        }
+
+        when {
+            consumedAd != null -> {
+                AndroidView(
+                    factory = { context -> inflateNativeAdView(context, nativeLayout) },
+                    modifier = modifier.fillMaxWidth(),
+                    update = { adView -> bindNativeAd(adView, consumedAd!!) }
+                )
+            }
+
+            state is NativeAdState.Loading -> {
                 AdLogger.debug(AdLogger.TYPE_NATIVE, "Rendering shimmer while loading: $adId")
                 if (shimmerAds != null) {
                     shimmerAds()
@@ -385,27 +423,18 @@ object NativeAdsController {
                 }
             }
 
-            is NativeAdState.Loaded -> {
-                AdLogger.logShowing(AdLogger.TYPE_NATIVE, adId, isHigher = false)
-                AndroidView(
-                    factory = { context -> inflateNativeAdView(context, nativeLayout) },
-                    modifier = modifier.fillMaxWidth(),
-                    update = { adView -> bindNativeAd(adView, state.nativeAd) }
-                )
-            }
-
-            is NativeAdState.Failed -> {
+            state is NativeAdState.Failed -> {
                 AdLogger.error(
                     AdLogger.TYPE_NATIVE,
                     "Render skipped (state=Failed): $adId | ${state.e.message}"
                 )
             }
 
-            NativeAdState.NotLoaded -> {
+            state is NativeAdState.NotLoaded -> {
                 AdLogger.debug(AdLogger.TYPE_NATIVE, "Render skipped (state=NotLoaded): $adId")
             }
 
-            null -> {
+            else -> {
                 AdLogger.debug(
                     AdLogger.TYPE_NATIVE,
                     "Render skipped (no state registered for key): $adId"

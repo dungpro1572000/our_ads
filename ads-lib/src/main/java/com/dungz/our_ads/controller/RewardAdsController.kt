@@ -78,43 +78,40 @@ object RewardAdsController {
             onShowFailed()
             return
         }
-        listAds[adUnitId]?.let {
-            if (it.value is RewardAdState.Loaded) {
-                AdLogger.logShowing(AdLogger.TYPE_REWARDED, adUnitId, isHigher = false)
-                AppAdMob.showRewardAds(
-                    activity,
-                    (it.value as RewardAdState.Loaded).rewardedAd,
-                    onUserEarnedReward = { rewardItem ->
-                        AdLogger.logRewardEarned(
-                            AdLogger.TYPE_REWARDED,
-                            rewardType = rewardItem.type,
-                            rewardAmount = rewardItem.amount
-                        )
-                        onUserEarn()
-                    },
-                    onAdDismissed = {
-                        listAds.remove(adUnitId)
-                        AdLogger.logDismissed(AdLogger.TYPE_REWARDED, adUnitId)
-                        AdLogger.debug(AdLogger.TYPE_REWARDED, "onShow ads successfully")
-                        onShowSuccess()
-                    },
-                    onAdFailedToShow = {
-                        listAds.remove(adUnitId)
-                        AdLogger.logFailedToShow(
-                            AdLogger.TYPE_REWARDED,
-                            adUnitId,
-                            it.message
-                        )
-                        onShowFailed()
-                    },
-                    onAdClicked = {
-                        AdLogger.logClicked(AdLogger.TYPE_REWARDED, adUnitId)
-                    },
-                    onAdImpression = {
-                        AdLogger.logImpression(AdLogger.TYPE_REWARDED, adUnitId)
-                    })
-            }
-        }
+        val ad = (listAds[adUnitId]?.value as? RewardAdState.Loaded)?.rewardedAd ?: return
+        // Remove immediately to prevent duplicate show from another screen
+        listAds.remove(adUnitId)
+        AdLogger.logShowing(AdLogger.TYPE_REWARDED, adUnitId, isHigher = false)
+        AppAdMob.showRewardAds(
+            activity,
+            ad,
+            onUserEarnedReward = { rewardItem ->
+                AdLogger.logRewardEarned(
+                    AdLogger.TYPE_REWARDED,
+                    rewardType = rewardItem.type,
+                    rewardAmount = rewardItem.amount
+                )
+                onUserEarn()
+            },
+            onAdDismissed = {
+                AdLogger.logDismissed(AdLogger.TYPE_REWARDED, adUnitId)
+                AdLogger.debug(AdLogger.TYPE_REWARDED, "onShow ads successfully")
+                onShowSuccess()
+            },
+            onAdFailedToShow = {
+                AdLogger.logFailedToShow(
+                    AdLogger.TYPE_REWARDED,
+                    adUnitId,
+                    it.message
+                )
+                onShowFailed()
+            },
+            onAdClicked = {
+                AdLogger.logClicked(AdLogger.TYPE_REWARDED, adUnitId)
+            },
+            onAdImpression = {
+                AdLogger.logImpression(AdLogger.TYPE_REWARDED, adUnitId)
+            })
     }
 
     suspend fun loadHighNormalIds(
