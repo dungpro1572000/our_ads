@@ -7,8 +7,6 @@ import com.dungz.our_ads.AdsInitializer
 class AppApplication: Application() {
     override fun onCreate() {
         super.onCreate()
-        AdsInitializer.initialize(this) {
-            Log.d("TAG", "Ads SDK initialized")
-        }
+        // Ads SDK init moved to MainActivity to enable GDPR consent flow (requires Activity)
     }
 }

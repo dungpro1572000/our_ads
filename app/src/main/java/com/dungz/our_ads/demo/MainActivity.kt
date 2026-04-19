@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.dungz.our_ads.AdsInitializer
 import com.dungz.our_ads.controller.InterAdsController
 import com.dungz.our_ads.controller.NativeAdsController
 import com.dungz.our_ads.controller.RewardAdsController
@@ -60,6 +61,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Init ads SDK with GDPR consent flow
+        AdsInitializer.initialize(this) {
+            Log.d(TAG, "Ads SDK initialized")
+        }
         lifecycleScope.launch {
             RemoteConfigData.syncData()
         }
